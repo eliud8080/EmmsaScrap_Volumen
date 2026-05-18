@@ -1,0 +1,104 @@
+name: EMMSA Volumen Historico
+
+on:
+
+  workflow_dispatch:
+
+  schedule:
+    # Todos los días 8:00 AM Perú (13:00 UTC aprox)
+    - cron: "0 13 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+
+  scrape:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ==========================================
+      # CLONAR REPOSITORIO
+      # ==========================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ==========================================
+      # PYTHON
+      # ==========================================
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # ==========================================
+      # CHROME
+      # ==========================================
+      - name: Install Google Chrome
+        run: |
+
+          sudo apt-get update
+
+          sudo apt-get install -y wget gnupg unzip
+
+          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+
+          sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list'
+
+          sudo apt-get update
+
+          sudo apt-get install -y google-chrome-stable
+
+      # ==========================================
+      # CHROMEDRIVER
+      # ==========================================
+      - name: Install ChromeDriver
+        run: |
+
+          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
+
+          DRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_${CHROME_VERSION}")
+
+          wget -N "https://storage.googleapis.com/chrome-for-testing-public/${DRIVER_VERSION}/linux64/chromedriver-linux64.zip"
+
+          unzip chromedriver-linux64.zip
+
+          sudo mv chromedriver-linux64/chromedriver /usr/local/bin/
+
+          sudo chmod +x /usr/local/bin/chromedriver
+
+      # ==========================================
+      # DEPENDENCIAS
+      # ==========================================
+      - name: Install Python dependencies
+        run: |
+
+          pip install --upgrade pip
+
+          pip install pandas selenium webdriver-manager
+
+      # ==========================================
+      # EJECUTAR SCRAPER
+      # ==========================================
+      - name: Run scraper
+        run: |
+
+          python scraper.py
+
+      # ==========================================
+      # COMMIT CSV
+      # ==========================================
+      - name: Commit CSV updates
+        run: |
+
+          git config --global user.name "github-actions"
+
+          git config --global user.email "actions@github.com"
+
+          git add ArchBIV/*.csv
+
+          git diff --cached --quiet || git commit -m "📊 Actualización automática EMMSA"
+
+          git push
